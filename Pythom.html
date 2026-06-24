@@ -1,120 +1,252 @@
-python3 << 'EOF'
-import pandas as pd
-import json
 
-# Load files
-prod = pd.read_excel("/mnt/user-data/uploads/DimProducto.xlsx")
-ventas = pd.read_excel("/mnt/user-data/uploads/FactVentas.xlsx")
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:1.5rem}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:1.5rem}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:1rem}
+.metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.metric-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem}
+.card-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:.04em}
+.tab-bar{display:flex;gap:8px;margin-bottom:1.5rem;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:0}
+.tab{font-size:13px;padding:6px 12px;cursor:pointer;border:none;background:none;color:var(--color-text-secondary);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--color-text-primary);font-weight:500;border-bottom:2px solid #3266ad}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
+.badge-up{background:#EAF3DE;color:#3B6D11}
+.badge-down{background:#FCEBEB;color:#A32D2D}
+.row-item{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px}
+.row-item:last-child{border-bottom:none}
+.bar-wrap{width:100%;background:var(--color-background-secondary);border-radius:4px;height:6px;margin-top:3px}
+.bar-fill{height:6px;border-radius:4px;background:#3266ad}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary)}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.section-title{font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:12px}
+.alerta{background:#FAEEDA;border-radius:var(--border-radius-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:#854F0B;display:flex;align-items:flex-start;gap:8px}
+.alerta-verde{background:#EAF3DE;color:#3B6D11}
+.view{display:none}
+.view.active{display:block}
+select{font-size:13px;padding:4px 8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+</style>
 
-print("=== PRODUCTOS ===")
-print(f"Total productos: {len(prod)}")
-print(f"Categorías: {prod['Categoria'].nunique()}")
-print(prod['Categoria'].value_counts().to_dict())
-print(f"Subcategorías: {prod['Subcategoria'].nunique()}")
-print("\nCosto promedio por categoría:")
-print(prod.groupby('Categoria')['CostoBase'].mean().round(2).to_dict())
+<h2 class="sr-only" style="position:absolute;left:-9999px">Dashboard comercial: análisis de 5,000 ventas con 1,000 productos en 5 categorías</h2>
 
-print("\n=== VENTAS ===")
-print(f"Total registros: {len(ventas)}")
-print(f"Columnas: {list(ventas.columns)}")
-print(ventas.dtypes)
-print(f"\nRango fechas: {ventas['Fecha'].min()} a {ventas['Fecha'].max()}")
-print(f"Cantidad negativas (devoluciones): {(ventas['Cantidad'] < 0).sum()}")
-print(f"Sin descuento: {ventas['Descuento'].isna().sum()}")
+<div style="padding:0.5rem 0 1.5rem">
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab('resumen')">Resumen</button>
+    <button class="tab" onclick="switchTab('categorias')">Categorías</button>
+    <button class="tab" onclick="switchTab('tendencia')">Tendencia</button>
+    <button class="tab" onclick="switchTab('productos')">Top productos</button>
+    <button class="tab" onclick="switchTab('alertas')">Alertas / decisiones</button>
+  </div>
 
-# Revenue calculation
-ventas['Descuento'] = ventas['Descuento'].fillna(0)
-ventas['Revenue'] = ventas['Cantidad'] * ventas['PrecioUnitario'] * (1 - ventas['Descuento'])
+  <!-- RESUMEN -->
+  <div class="view active" id="view-resumen">
+    <div class="grid-4">
+      <div class="metric">
+        <div class="metric-label">Revenue total</div>
+        <div class="metric-value">$11.1M</div>
+        <div class="metric-sub">2024-2025 · 5,000 transacciones</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Margen promedio</div>
+        <div class="metric-value">28.6%</div>
+        <div class="metric-sub">Estable entre categorías</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Productos activos</div>
+        <div class="metric-value">1,000</div>
+        <div class="metric-sub">5 categorías · 25 subcategorías</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Devoluciones</div>
+        <div class="metric-value">143</div>
+        <div class="metric-sub">2.86% de transacciones</div>
+      </div>
+    </div>
 
-# Merge
-df = ventas.merge(prod, on='ID_Producto', how='left')
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Revenue por categoría</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <span class="legend-item"><span class="legend-dot" style="background:#3266ad"></span>Ropa</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#1D9E75"></span>Automotriz</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>Deportes</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#D4537E"></span>Hogar</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#7F77DD"></span>Electrónica</span>
+        </div>
+        <div style="position:relative;height:220px"><canvas id="chartDonut" role="img" aria-label="Gráfico de pastel de revenue por categoría">Ropa 22.5%, Automotriz 21.5%, Deportes 21.2%, Hogar 17.6%, Electrónica 17.2%</canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Distribución descuentos aplicados</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <span class="legend-item"><span class="legend-dot" style="background:#888780"></span>Sin dto.</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#5DCAA5"></span>5%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#3266ad"></span>10%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>15%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#D4537E"></span>20%</span>
+        </div>
+        <div style="position:relative;height:220px"><canvas id="chartDesc" role="img" aria-label="Distribución de descuentos aplicados">Sin descuento 1290, 5% 927, 10% 925, 15% 938, 20% 920</canvas></div>
+      </div>
+    </div>
 
-print("\n=== REVENUE POR CATEGORÍA ===")
-rev_cat = df.groupby('Categoria')['Revenue'].sum().sort_values(ascending=False).round(0)
-print(rev_cat.to_dict())
+    <div class="card">
+      <div class="card-title">Top 10 subcategorías por revenue</div>
+      <div id="subcat-list"></div>
+    </div>
+  </div>
 
-print("\n=== REVENUE POR SUBCATEGORÍA (TOP 15) ===")
-rev_sub = df.groupby('Subcategoria')['Revenue'].sum().sort_values(ascending=False).head(15).round(0)
-print(rev_sub.to_dict())
+  <!-- CATEGORÍAS -->
+  <div class="view" id="view-categorias">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Comparativo completo por categoría</div>
+      <div style="position:relative;height:300px"><canvas id="chartCat" role="img" aria-label="Revenue por categoría comparativo">Ropa 2.5M, Automotriz 2.4M, Deportes 2.4M, Hogar 2.0M, Electrónica 1.9M</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Margen estimado precio venta vs costo base</div>
+      <div style="position:relative;height:240px"><canvas id="chartMargen" role="img" aria-label="Margen por categoría">Todas las categorías ~28-29%</canvas></div>
+    </div>
+  </div>
 
-print("\n=== REVENUE POR AÑO-MES ===")
-df['Fecha'] = pd.to_datetime(df['Fecha'])
-df['AnoMes'] = df['Fecha'].dt.to_period('M')
-rev_mes = df.groupby('AnoMes')['Revenue'].sum().round(0)
-print(rev_mes.to_dict())
+  <!-- TENDENCIA -->
+  <div class="view" id="view-tendencia">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Revenue mensual 2024-2025
+        <select id="yearFilter" onchange="filterYear()" style="float:right">
+          <option value="all">Ambos años</option>
+          <option value="2024">Solo 2024</option>
+          <option value="2025">Solo 2025</option>
+        </select>
+      </div>
+      <div style="position:relative;height:280px"><canvas id="chartTrend" role="img" aria-label="Tendencia de revenue mensual 2024 a 2025">Datos mensuales de enero 2024 a diciembre 2025</canvas></div>
+    </div>
+    <div class="grid-4">
+      <div class="metric"><div class="metric-label">Mejor mes 2024</div><div class="metric-value">Mayo</div><div class="metric-sub">$596K</div></div>
+      <div class="metric"><div class="metric-label">Mejor mes 2025</div><div class="metric-value">Noviembre</div><div class="metric-sub">$547K</div></div>
+      <div class="metric"><div class="metric-label">Mes más bajo</div><div class="metric-value">Junio 2025</div><div class="metric-sub">$317K — anomalía</div></div>
+      <div class="metric"><div class="metric-label">Promedio mensual</div><div class="metric-value">$463K</div><div class="metric-sub">24 meses</div></div>
+    </div>
+  </div>
 
-print("\n=== TOP 10 PRODUCTOS (por revenue) ===")
-top_prod = df.groupby(['ID_Producto','NombreProducto','Subcategoria'])['Revenue'].sum().sort_values(ascending=False).head(10).round(0)
-print(top_prod.to_dict())
+  <!-- TOP PRODUCTOS -->
+  <div class="view" id="view-productos">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Top 10 productos por revenue generado</div>
+      <div style="position:relative;height:420px"><canvas id="chartTopProd" role="img" aria-label="Top 10 productos por revenue">DEP-ROP-0088 lidera con $58,473</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Detalle con subcategoría</div>
+      <div id="top-prod-list"></div>
+    </div>
+  </div>
 
-print("\n=== MARGEN ESTIMADO ===")
-# precio venta promedio vs costo base
-margin = df.groupby('Categoria').agg(
-    costo_prom=('CostoBase','mean'),
-    precio_prom=('PrecioUnitario','mean')
-).round(2)
-margin['margen_pct'] = ((margin['precio_prom'] - margin['costo_prom'])/margin['precio_prom']*100).round(1)
-print(margin.to_dict())
+  <!-- ALERTAS -->
+  <div class="view" id="view-alertas">
+    <div class="section-title" style="margin-bottom:16px">Hallazgos clave para decisiones de compra</div>
 
-print("\n=== TIENDAS ===")
-print(f"Número de tiendas: {ventas['ID_Tienda'].nunique()}")
-print("\nTop 10 tiendas por revenue:")
-top_tiendas = df.groupby('ID_Tienda')['Revenue'].sum().sort_values(ascending=False).head(10).round(0)
-print(top_tiendas.to_dict())
+    <div class="alerta alerta-verde"><i class="ti ti-trending-up" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>Ropa y Automotriz lideran.</strong> Son las 2 categorías con mayor revenue total. Reforzar inventario en Accesorios Moda, Ropa Caballero y Accesorios Auto es una prioridad clara.</div></div>
 
-print("\n=== DESCUENTOS ===")
-print("Distribución de descuentos:")
-print(ventas['Descuento'].value_counts().sort_index().to_dict())
+    <div class="alerta alerta-verde"><i class="ti ti-target" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>Subcategorías de alto desempeño.</strong> Accesorios Moda ($686K), Accesorios Auto ($561K) y Limpieza Automotriz ($559K) son los 3 pilares más rentables. Considerar ampliar surtido en estas líneas.</div></div>
 
-EOF
-Salida
+    <div class="alerta"><i class="ti ti-alert-triangle" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>Junio 2025 muestra caída pronunciada ($317K).</strong> Es un 35% menor al promedio. Revisar si hubo desabasto, problemas logísticos o cambio estacional. Anticipar inventario para ese período.</div></div>
 
-=== PRODUCTOS ===
-Total productos: 1000
-Categorías: 5
-{'Automotriz': 219, 'Ropa': 216, 'Deportes': 207, 'Hogar': 180, 'Electrónica': 178}
-Subcategorías: 25
+    <div class="alerta"><i class="ti ti-rotate" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>143 devoluciones (2.86%).</strong> Aunque manejable, conviene identificar si se concentran en alguna categoría. Una tasa alta por subcategoría puede señalar problemas de calidad o expectativas no cumplidas.</div></div>
 
-Costo promedio por categoría:
-{'Automotriz': 176.17, 'Deportes': 175.32, 'Electrónica': 174.72, 'Hogar': 174.21, 'Ropa': 171.92}
+    <div class="alerta alerta-verde"><i class="ti ti-discount" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>Los descuentos están bien distribuidos.</strong> 26% sin descuento, 74% con descuentos del 5-20% en distribución uniforme. Esto indica una política de precios consistente, no reactiva.</div></div>
 
-=== VENTAS ===
-Total registros: 5000
-Columnas: ['ID_Venta', 'Fecha', 'ID_Producto', 'ID_Tienda', 'Cantidad', 'PrecioUnitario', 'Descuento']
-ID_Venta              str
-Fecha                 str
-ID_Producto           str
-ID_Tienda             str
-Cantidad            int64
-PrecioUnitario    float64
-Descuento         float64
-dtype: object
+    <div class="alerta"><i class="ti ti-building-store" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>997 tiendas activas, muy atomizado.</strong> La tienda top (TIEN0060) genera solo $37K. Si buscas concentrar pedidos, prioriza las 50 tiendas de mayor volumen para negociar mejores condiciones.</div></div>
 
-Rango fechas: 2024-01-01 a 2025-12-31
-Cantidad negativas (devoluciones): 143
-Sin descuento: 1290
+    <div class="alerta alerta-verde"><i class="ti ti-star" aria-hidden="true" style="font-size:18px;margin-top:1px;flex-shrink:0"></i><div><strong>Margen estable del 28-29% en todas las categorías.</strong> El precio de venta promedio es ~$243 vs costo ~$174. No hay categoría con margen negativo. Oportunidad de optimizar en Electrónica (28.3%, la más baja).</div></div>
 
-=== REVENUE POR CATEGORÍA ===
-{'Ropa': 2495903.0, 'Automotriz': 2382079.0, 'Deportes': 2356154.0, 'Hogar': 1954616.0, 'Electrónica': 1911421.0}
+    <div style="margin-top:1.5rem">
+      <button onclick="sendPrompt('¿Qué productos debería adquirir primero basándome en los datos de ventas?')" style="margin-right:8px;font-size:13px">¿Qué comprar primero? ↗</button>
+      <button onclick="sendPrompt('¿Por qué cayeron las ventas en junio 2025 y cómo prevenirlo?')" style="margin-right:8px;font-size:13px">Analizar caída junio ↗</button>
+      <button onclick="sendPrompt('Dame una estrategia de descuentos basada en los datos de ventas')" style="font-size:13px">Estrategia descuentos ↗</button>
+    </div>
+  </div>
+</div>
 
-=== REVENUE POR SUBCATEGORÍA (TOP 15) ===
-{'Accesorios Moda': 685641.0, 'Accesorios Auto': 561436.0, 'Limpieza': 559009.0, 'Caballero': 536118.0, 'Camping': 535651.0, 'Refacciones': 531294.0, 'Dama': 515526.0, 'Ropa Deportiva': 498787.0, 'Iluminación': 498391.0, 'Calzado Deportivo': 467287.0, 'Fitness': 460139.0, 'Herramientas': 430851.0, 'Laptops': 426601.0, 'Accesorios': 419587.0, 'Smartphones': 401362.0}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['resumen','categorias','tendencia','productos','alertas'][i]===name)});
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+name));
+}
 
-=== REVENUE POR AÑO-MES ===
-{Period('2024-01', 'M'): 514015.0, Period('2024-02', 'M'): 385829.0, Period('2024-03', 'M'): 435859.0, Period('2024-04', 'M'): 475237.0, Period('2024-05', 'M'): 596258.0, Period('2024-06', 'M'): 436929.0, Period('2024-07', 'M'): 413154.0, Period('2024-08', 'M'): 502552.0, Period('2024-09', 'M'): 430042.0, Period('2024-10', 'M'): 425834.0, Period('2024-11', 'M'): 436215.0, Period('2024-12', 'M'): 426069.0, Period('2025-01', 'M'): 489961.0, Period('2025-02', 'M'): 491779.0, Period('2025-03', 'M'): 485028.0, Period('2025-04', 'M'): 453969.0, Period('2025-05', 'M'): 444353.0, Period('2025-06', 'M'): 317144.0, Period('2025-07', 'M'): 356831.0, Period('2025-08', 'M'): 493645.0, Period('2025-09', 'M'): 488167.0, Period('2025-10', 'M'): 526380.0, Period('2025-11', 'M'): 546850.0, Period('2025-12', 'M'): 528071.0}
+const catLabels=['Ropa','Automotriz','Deportes','Hogar','Electrónica'];
+const catRevenue=[2495903,2382079,2356154,1954616,1911421];
+const catColors=['#3266ad','#1D9E75','#D85A30','#D4537E','#7F77DD'];
 
-=== TOP 10 PRODUCTOS (por revenue) ===
-{('PROD0088', 'Producto DEP-ROP-0088', 'Ropa Deportiva'): 58473.0, ('PROD0261', 'Producto ROP-ACC-0261', 'Accesorios Moda'): 57711.0, ('PROD0024', 'Producto DEP-CAM-0024', 'Camping'): 52116.0, ('PROD0389', 'Producto HOG-MUE-0389', 'Muebles'): 51977.0, ('PROD0038', 'Producto DEP-ROP-0038', 'Ropa Deportiva'): 47732.0, ('PROD0199', 'Producto DEP-FIT-0199', 'Fitness'): 44620.0, ('PROD0168', 'Producto AUT-LIM-0168', 'Limpieza'): 41853.0, ('PROD0339', 'Producto AUT-REF-0339', 'Refacciones'): 41068.0, ('PROD0290', 'Producto DEP-CAM-0290', 'Camping'): 40972.0, ('PROD0560', 'Producto ELE-ACC-0560', 'Accesorios'): 40559.0}
+new Chart(document.getElementById('chartDonut'),{
+  type:'doughnut',
+  data:{labels:catLabels,datasets:[{data:catRevenue,backgroundColor:catColors,borderWidth:2,borderColor:'#fff'}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' $'+Math.round(c.raw/1000)+'K ('+((c.raw/11100173)*100).toFixed(1)+'%)'}}}}
+});
 
-=== MARGEN ESTIMADO ===
-{'costo_prom': {'Automotriz': 174.62, 'Deportes': 173.86, 'Electrónica': 175.03, 'Hogar': 171.55, 'Ropa': 172.76}, 'precio_prom': {'Automotriz': 244.51, 'Deportes': 244.59, 'Electrónica': 244.17, 'Hogar': 239.91, 'Ropa': 242.14}, 'margen_pct': {'Automotriz': 28.6, 'Deportes': 28.9, 'Electrónica': 28.3, 'Hogar': 28.5, 'Ropa': 28.7}}
+new Chart(document.getElementById('chartDesc'),{
+  type:'doughnut',
+  data:{labels:['Sin dto.','5%','10%','15%','20%'],datasets:[{data:[1290,927,925,938,920],backgroundColor:['#888780','#5DCAA5','#3266ad','#D85A30','#D4537E'],borderWidth:2,borderColor:'#fff'}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+' transacciones'}}}}
+});
 
-=== TIENDAS ===
-Número de tiendas: 997
+const subcats=['Accesorios Moda','Accesorios Auto','Limpieza','Caballero','Camping','Refacciones','Dama','Ropa Deportiva','Iluminación','Calzado Deportivo'];
+const subRevs=[685641,561436,559009,536118,535651,531294,515526,498787,498391,467287];
+const maxRev=685641;
+const el=document.getElementById('subcat-list');
+subcats.forEach((s,i)=>{
+  const pct=Math.round(subRevs[i]/maxRev*100);
+  el.innerHTML+=`<div class="row-item"><div style="flex:1;min-width:0"><div>${s}</div><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></div><div style="margin-left:12px;font-weight:500;color:var(--color-text-primary);flex-shrink:0">$${Math.round(subRevs[i]/1000)}K</div></div>`;
+});
 
-Top 10 tiendas por revenue:
-{'TIEN0060': 37635.0, 'TIEN0667': 34077.0, 'TIEN0198': 33899.0, 'TIEN0972': 33677.0, 'TIEN0914': 33320.0, 'TIEN0131': 31875.0, 'TIEN0498': 31112.0, 'TIEN0027': 30899.0, 'TIEN0164': 29583.0, 'TIEN0425': 28804.0}
+new Chart(document.getElementById('chartCat'),{
+  type:'bar',
+  data:{labels:catLabels,datasets:[{label:'Revenue total',data:catRevenue,backgroundColor:catColors,borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+Math.round(c.raw/1000)+'K'}}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'K'},grid:{color:'rgba(0,0,0,.06)'}},x:{grid:{display:false},ticks:{autoSkip:false}}}}
+});
 
-=== DESCUENTOS ===
-Distribución de descuentos:
-{0.0: 1290, 0.05: 927, 0.1: 925, 0.15: 938, 0.2: 920}
+const catCostos=[174.62,173.86,175.03,171.55,172.76];
+const catPrecios=[244.51,244.59,244.17,239.91,242.14];
+new Chart(document.getElementById('chartMargen'),{
+  type:'bar',
+  data:{labels:catLabels,datasets:[{label:'Costo prom.',data:catCostos,backgroundColor:'#B5D4F4',borderRadius:4},{label:'Precio venta prom.',data:catPrecios,backgroundColor:catColors,borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>' $'+c.raw.toFixed(2)}}},scales:{y:{ticks:{callback:v=>'$'+v},grid:{color:'rgba(0,0,0,.06)'}},x:{grid:{display:false},ticks:{autoSkip:false}}}}
+});
+
+const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const data2024=[514015,385829,435859,475237,596258,436929,413154,502552,430042,425834,436215,426069];
+const data2025=[489961,491779,485028,453969,444353,317144,356831,493645,488167,526380,546850,528071];
+let trendChart;
+
+function buildTrend(filter){
+  const ctx=document.getElementById('chartTrend');
+  if(trendChart)trendChart.destroy();
+  let labels,datasets;
+  if(filter==='2024'){labels=meses.map(m=>m+' 2024');datasets=[{label:'2024',data:data2024,borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.08)',fill:true,tension:.35,pointRadius:3}];}
+  else if(filter==='2025'){labels=meses.map(m=>m+' 2025');datasets=[{label:'2025',data:data2025,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,.08)',fill:true,tension:.35,pointRadius:3}];}
+  else{
+    const l24=meses.map(m=>m+" '24"),l25=meses.map(m=>m+" '25");
+    labels=[...l24,...l25];
+    datasets=[{label:"2024",data:[...data2024,...Array(12).fill(null)],borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.06)',fill:false,tension:.35,pointRadius:3,spanGaps:false},{label:"2025",data:[...Array(12).fill(null),...data2025],borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,.06)',fill:false,tension:.35,pointRadius:3,spanGaps:false}];
+  }
+  trendChart=new Chart(ctx,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>' $'+Math.round(c.raw/1000)+'K'}}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'K'},grid:{color:'rgba(0,0,0,.06)'}},x:{grid:{display:false},ticks:{autoSkip:true,maxRotation:45}}}}});
+}
+function filterYear(){buildTrend(document.getElementById('yearFilter').value);}
+buildTrend('all');
+
+const topProds=['DEP-ROP-0088','ROP-ACC-0261','DEP-CAM-0024','HOG-MUE-0389','DEP-ROP-0038','DEP-FIT-0199','AUT-LIM-0168','AUT-REF-0339','DEP-CAM-0290','ELE-ACC-0560'];
+const topRevs=[58473,57711,52116,51977,47732,44620,41853,41068,40972,40559];
+const topSub=['Ropa Deportiva','Accesorios Moda','Camping','Muebles','Ropa Deportiva','Fitness','Limpieza','Refacciones','Camping','Accesorios Elec.'];
+const topColors=['#D85A30','#3266ad','#D85A30','#D4537E','#D85A30','#D85A30','#1D9E75','#1D9E75','#D85A30','#7F77DD'];
+
+new Chart(document.getElementById('chartTopProd'),{
+  type:'bar',
+  data:{labels:topProds,datasets:[{label:'Revenue',data:topRevs,backgroundColor:topColors,borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' $'+Math.round(c.raw/1000)+'K'}}},scales:{x:{ticks:{callback:v=>'$'+Math.round(v/1000)+'K'},grid:{color:'rgba(0,0,0,.06)'}},y:{grid:{display:false}}}}
+});
+
+const prodList=document.getElementById('top-prod-list');
+topProds.forEach((p,i)=>{
+  prodList.innerHTML+=`<div class="row-item"><div><span style="font-weight:500">${p}</span> <span style="color:var(--color-text-secondary);font-size:12px">· ${topSub[i]}</span></div><div style="font-weight:500;color:var(--color-text-primary)">$${topRevs[i].toLocaleString()}</div></div>`;
+});
+</script>

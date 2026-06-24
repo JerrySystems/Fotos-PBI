@@ -1,0 +1,120 @@
+python3 << 'EOF'
+import pandas as pd
+import json
+
+# Load files
+prod = pd.read_excel("/mnt/user-data/uploads/DimProducto.xlsx")
+ventas = pd.read_excel("/mnt/user-data/uploads/FactVentas.xlsx")
+
+print("=== PRODUCTOS ===")
+print(f"Total productos: {len(prod)}")
+print(f"Categorías: {prod['Categoria'].nunique()}")
+print(prod['Categoria'].value_counts().to_dict())
+print(f"Subcategorías: {prod['Subcategoria'].nunique()}")
+print("\nCosto promedio por categoría:")
+print(prod.groupby('Categoria')['CostoBase'].mean().round(2).to_dict())
+
+print("\n=== VENTAS ===")
+print(f"Total registros: {len(ventas)}")
+print(f"Columnas: {list(ventas.columns)}")
+print(ventas.dtypes)
+print(f"\nRango fechas: {ventas['Fecha'].min()} a {ventas['Fecha'].max()}")
+print(f"Cantidad negativas (devoluciones): {(ventas['Cantidad'] < 0).sum()}")
+print(f"Sin descuento: {ventas['Descuento'].isna().sum()}")
+
+# Revenue calculation
+ventas['Descuento'] = ventas['Descuento'].fillna(0)
+ventas['Revenue'] = ventas['Cantidad'] * ventas['PrecioUnitario'] * (1 - ventas['Descuento'])
+
+# Merge
+df = ventas.merge(prod, on='ID_Producto', how='left')
+
+print("\n=== REVENUE POR CATEGORÍA ===")
+rev_cat = df.groupby('Categoria')['Revenue'].sum().sort_values(ascending=False).round(0)
+print(rev_cat.to_dict())
+
+print("\n=== REVENUE POR SUBCATEGORÍA (TOP 15) ===")
+rev_sub = df.groupby('Subcategoria')['Revenue'].sum().sort_values(ascending=False).head(15).round(0)
+print(rev_sub.to_dict())
+
+print("\n=== REVENUE POR AÑO-MES ===")
+df['Fecha'] = pd.to_datetime(df['Fecha'])
+df['AnoMes'] = df['Fecha'].dt.to_period('M')
+rev_mes = df.groupby('AnoMes')['Revenue'].sum().round(0)
+print(rev_mes.to_dict())
+
+print("\n=== TOP 10 PRODUCTOS (por revenue) ===")
+top_prod = df.groupby(['ID_Producto','NombreProducto','Subcategoria'])['Revenue'].sum().sort_values(ascending=False).head(10).round(0)
+print(top_prod.to_dict())
+
+print("\n=== MARGEN ESTIMADO ===")
+# precio venta promedio vs costo base
+margin = df.groupby('Categoria').agg(
+    costo_prom=('CostoBase','mean'),
+    precio_prom=('PrecioUnitario','mean')
+).round(2)
+margin['margen_pct'] = ((margin['precio_prom'] - margin['costo_prom'])/margin['precio_prom']*100).round(1)
+print(margin.to_dict())
+
+print("\n=== TIENDAS ===")
+print(f"Número de tiendas: {ventas['ID_Tienda'].nunique()}")
+print("\nTop 10 tiendas por revenue:")
+top_tiendas = df.groupby('ID_Tienda')['Revenue'].sum().sort_values(ascending=False).head(10).round(0)
+print(top_tiendas.to_dict())
+
+print("\n=== DESCUENTOS ===")
+print("Distribución de descuentos:")
+print(ventas['Descuento'].value_counts().sort_index().to_dict())
+
+EOF
+Salida
+
+=== PRODUCTOS ===
+Total productos: 1000
+Categorías: 5
+{'Automotriz': 219, 'Ropa': 216, 'Deportes': 207, 'Hogar': 180, 'Electrónica': 178}
+Subcategorías: 25
+
+Costo promedio por categoría:
+{'Automotriz': 176.17, 'Deportes': 175.32, 'Electrónica': 174.72, 'Hogar': 174.21, 'Ropa': 171.92}
+
+=== VENTAS ===
+Total registros: 5000
+Columnas: ['ID_Venta', 'Fecha', 'ID_Producto', 'ID_Tienda', 'Cantidad', 'PrecioUnitario', 'Descuento']
+ID_Venta              str
+Fecha                 str
+ID_Producto           str
+ID_Tienda             str
+Cantidad            int64
+PrecioUnitario    float64
+Descuento         float64
+dtype: object
+
+Rango fechas: 2024-01-01 a 2025-12-31
+Cantidad negativas (devoluciones): 143
+Sin descuento: 1290
+
+=== REVENUE POR CATEGORÍA ===
+{'Ropa': 2495903.0, 'Automotriz': 2382079.0, 'Deportes': 2356154.0, 'Hogar': 1954616.0, 'Electrónica': 1911421.0}
+
+=== REVENUE POR SUBCATEGORÍA (TOP 15) ===
+{'Accesorios Moda': 685641.0, 'Accesorios Auto': 561436.0, 'Limpieza': 559009.0, 'Caballero': 536118.0, 'Camping': 535651.0, 'Refacciones': 531294.0, 'Dama': 515526.0, 'Ropa Deportiva': 498787.0, 'Iluminación': 498391.0, 'Calzado Deportivo': 467287.0, 'Fitness': 460139.0, 'Herramientas': 430851.0, 'Laptops': 426601.0, 'Accesorios': 419587.0, 'Smartphones': 401362.0}
+
+=== REVENUE POR AÑO-MES ===
+{Period('2024-01', 'M'): 514015.0, Period('2024-02', 'M'): 385829.0, Period('2024-03', 'M'): 435859.0, Period('2024-04', 'M'): 475237.0, Period('2024-05', 'M'): 596258.0, Period('2024-06', 'M'): 436929.0, Period('2024-07', 'M'): 413154.0, Period('2024-08', 'M'): 502552.0, Period('2024-09', 'M'): 430042.0, Period('2024-10', 'M'): 425834.0, Period('2024-11', 'M'): 436215.0, Period('2024-12', 'M'): 426069.0, Period('2025-01', 'M'): 489961.0, Period('2025-02', 'M'): 491779.0, Period('2025-03', 'M'): 485028.0, Period('2025-04', 'M'): 453969.0, Period('2025-05', 'M'): 444353.0, Period('2025-06', 'M'): 317144.0, Period('2025-07', 'M'): 356831.0, Period('2025-08', 'M'): 493645.0, Period('2025-09', 'M'): 488167.0, Period('2025-10', 'M'): 526380.0, Period('2025-11', 'M'): 546850.0, Period('2025-12', 'M'): 528071.0}
+
+=== TOP 10 PRODUCTOS (por revenue) ===
+{('PROD0088', 'Producto DEP-ROP-0088', 'Ropa Deportiva'): 58473.0, ('PROD0261', 'Producto ROP-ACC-0261', 'Accesorios Moda'): 57711.0, ('PROD0024', 'Producto DEP-CAM-0024', 'Camping'): 52116.0, ('PROD0389', 'Producto HOG-MUE-0389', 'Muebles'): 51977.0, ('PROD0038', 'Producto DEP-ROP-0038', 'Ropa Deportiva'): 47732.0, ('PROD0199', 'Producto DEP-FIT-0199', 'Fitness'): 44620.0, ('PROD0168', 'Producto AUT-LIM-0168', 'Limpieza'): 41853.0, ('PROD0339', 'Producto AUT-REF-0339', 'Refacciones'): 41068.0, ('PROD0290', 'Producto DEP-CAM-0290', 'Camping'): 40972.0, ('PROD0560', 'Producto ELE-ACC-0560', 'Accesorios'): 40559.0}
+
+=== MARGEN ESTIMADO ===
+{'costo_prom': {'Automotriz': 174.62, 'Deportes': 173.86, 'Electrónica': 175.03, 'Hogar': 171.55, 'Ropa': 172.76}, 'precio_prom': {'Automotriz': 244.51, 'Deportes': 244.59, 'Electrónica': 244.17, 'Hogar': 239.91, 'Ropa': 242.14}, 'margen_pct': {'Automotriz': 28.6, 'Deportes': 28.9, 'Electrónica': 28.3, 'Hogar': 28.5, 'Ropa': 28.7}}
+
+=== TIENDAS ===
+Número de tiendas: 997
+
+Top 10 tiendas por revenue:
+{'TIEN0060': 37635.0, 'TIEN0667': 34077.0, 'TIEN0198': 33899.0, 'TIEN0972': 33677.0, 'TIEN0914': 33320.0, 'TIEN0131': 31875.0, 'TIEN0498': 31112.0, 'TIEN0027': 30899.0, 'TIEN0164': 29583.0, 'TIEN0425': 28804.0}
+
+=== DESCUENTOS ===
+Distribución de descuentos:
+{0.0: 1290, 0.05: 927, 0.1: 925, 0.15: 938, 0.2: 920}
